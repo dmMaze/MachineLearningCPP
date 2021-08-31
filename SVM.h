@@ -14,7 +14,7 @@ struct svm_parameter
     int max_iterations;
     double loss = -1;
     double delta_loss = 1e10;
-    bool verbose;
+    int verbose;
     int current_iteration;
     double training_acc;
     double max_acc = -1;
@@ -26,6 +26,9 @@ class SVM
 friend double calculate_error(const Eigen::MatrixXd& predict, const Eigen::MatrixXd& gts);
 friend double classify_accuracy(const Eigen::MatrixXd& classify_result, const Eigen::MatrixXd& gt);
 public:
+    static const int Linear = 0;
+    static const int Poly = 1;
+    static const int Gaussian = 2;
     SVM(DataLoader* _data_loader, int kernel_type = 0, double tol = 0.001, int loss_eval_circle = 10, double min_delta_loss = 0.0001, int max_iterations = -1, bool verbose = false)
     {
         dataloader = _data_loader;
@@ -46,24 +49,7 @@ public:
     virtual void train() = 0;
     virtual Eigen::MatrixXd predict(const Eigen::MatrixXd &input, bool post_process) = 0;
     void loadData(const std::string& data_path);
-    void setKernel()
-    {
-        switch (param.kernel_type)
-        {
-        case 0:
-            kernel_function = &SVM::linear;
-            break;
-        case 1:
-            kernel_function = &SVM::poly;
-            break;
-        case 2:
-            kernel_function = &SVM::gaussian;
-            break;
-        default:
-            kernel_function = &SVM::linear;
-            break;
-        }
-    }
+    void setKernel();
 
     template<typename T>
     void setParam(const std::string param_flag, T value)
@@ -96,38 +82,46 @@ public:
 
     Eigen::MatrixXd poly(Eigen::MatrixXd &m1, Eigen::MatrixXd &m2)
     {
-        return ((m1 * m2.transpose()).array() + 1).pow(param.poly_n);
+        return ((m1 * m2.transpose()).array() - 1).pow(param.poly_n);
     }
 
     Eigen::MatrixXd gaussian(Eigen::MatrixXd &m1, Eigen::MatrixXd &m2)
     {
         double gamma = 1. / 13;
-        Eigen::MatrixXd result(m1.rows(), m1.rows());
-        for (size_t i = 0; i < m1.rows(); ++i)
-        {
-            result.row(i) = (m1.rowwise() - m2.row(i)).rowwise().lpNorm<1>();
-            result.row(i) = (result.row(i).array().pow(2) * (-gamma)).exp();
-        }
+        Eigen::MatrixXd result(m1.rows(), m2.rows());
+        for (int i = 0; i < m1.rows(); ++i)
+            result.row(i) = ((m2.rowwise() - m1.row(i)).rowwise().lpNorm<1>().array().pow(2) * (-gamma)).exp();
         return result;
     }
 
-    void K(Eigen::MatrixXd &m1, Eigen::MatrixXd &m2)
+    double K(double x1, double x2)
     {
-        std::cout << (this->*kernel_function)(m1, m2) << std::endl;
+        Eigen::MatrixXd X1(1, 1), X2(1, 1);
+        X1(0, 0) = x1;
+        X2(0, 0) = x2;
+        return (this->*kernel_function)(X1, X2)(0, 0);
     }
 
-    void print_verbose()
+    void updateSupportVectors(int i)
     {
-        std::cout << param.current_iteration << "/" << param.max_iterations << "\t";
-        std::cout << "loss: " << param.loss << "\t" << "acc: " << int(param.training_acc*10000)/100. << "%";
-        std::cout <<"\t" << "max: " << int(param.max_acc*10000)/100. << "%" << std::endl;
+        double _tol_ = 0; 
+        if (std::abs(alpha(i)) < _tol_)
+        {
+            alpha(i) = 0;
+            vector_mask(i) = 0;
+        }
+        else
+            vector_mask(i) = 1;
     }
+
+    void printVerbose();
 
 protected:
     struct svm_parameter param;
-    Eigen::MatrixXd X;
-    Eigen::MatrixXd Y;
     std::vector<int> support_vector_indices;
+    Eigen::MatrixXd support_vectors;
+    Eigen::MatrixXd alpha;
+    Eigen::VectorXi vector_mask;
     DataLoader *dataloader;
 };
 
@@ -143,12 +137,10 @@ public:
     int takeStep(int&, int&);
 
 private:
-    Eigen::MatrixXd alpha;
+    
     Eigen::MatrixXd g;
     Eigen::MatrixXd E;
-    Eigen::MatrixXd support_vectors;
     double b;
-    double C = 0.001;
-
+    double C = 0.1;
 };
 #endif
