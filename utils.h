@@ -1,9 +1,13 @@
-#ifndef TOOLS_H
-#define TOOLS_H
+#ifndef UTILS_H
+#define UTILS_H
 
+#include <memory>
 #include <string>
 #include <set>
+#include <list>
+// #include 
 #include <iostream>
+#include <ostream>
 #include <istream>
 #include <sstream>
 #include <fstream>
@@ -11,7 +15,14 @@
 #define EIGEN_USE_BLAS
 #include <Eigen/Core>
 
-namespace Scalar{
+using std::shared_ptr;
+using std::unique_ptr;
+using std::make_shared;
+using std::cout;
+using std::cin;
+using std::set;
+
+namespace Scaler{
     const int STD = 0;
     const int MINMAX = 1;
     const int NORMALIZE = 2;
@@ -110,93 +121,7 @@ int loadMatrix(const std::string& path, Eigen::Matrix<T, Eigen::Dynamic, Eigen::
     return 0;
 }
 
-class DataLoader
-{
-public:
-    DataLoader(Eigen::MatrixXd &_X, Eigen::MatrixXd &_Y, bool shuffle=true)
-        :X(_X), Y(_Y)
-    {
-        setShuffle(shuffle);
-    }
-
-    DataLoader(Eigen::MatrixXd& data, bool shuffle=true, const std::string& scale_method="std")
-    {
-        Y = data.col(data.cols()-1);
-        X = data(Eigen::all, Eigen::seq(0, data.cols() - 2));
-        preprocess(shuffle, scale_method);
-    }
-
-    DataLoader(const std::string& path, bool shuffle=true, const std::string& scale_method="std")
-    {
-        Eigen::MatrixXd data;
-        loadMatrix(path, data);
-        DataLoader(data, shuffle, scale_method);
-        Y = data.col(data.cols()-1);
-        X = data(Eigen::all, Eigen::seq(0, data.cols() - 2));
-        preprocess(shuffle, scale_method);
-    }
-
-    DataLoader(const std::string& path, 
-        int (*dataParaser)(const std::string& path, Eigen::MatrixXd &M, const std::string& pattern), 
-        bool shuffle=true, const std::string& scale_method="std")
-    {
-        Eigen::MatrixXd data;
-        (*dataParaser)(path, data, " ");
-        DataLoader(data, shuffle, scale_method);
-        Y = data.col(data.cols()-1);
-        X = data(Eigen::all, Eigen::seq(0, data.cols() - 2));
-        preprocess(shuffle, scale_method);
-    }
-
-    void preprocess(bool shuffle=true, const std::string& scale_method="std")
-    {
-        if(scale_method == "std")
-            Scalar::standardize(X);
-        else if(scale_method == "norm" || scale_method == "norml2")
-            Scalar::normalize(X);
-        else if(scale_method == "minmax")
-            Scalar::minmax(X);
-        setShuffle(shuffle);
-    }
-
-    void setShuffle(bool shuffle)
-    {
-        shuffle_flag = shuffle;
-        if (shuffle_flag)
-        {
-            shuffer = Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic>(X.rows());
-            shuffer.setIdentity();
-        }
-    }
-
-    void shuffle()
-    {
-        std::random_shuffle(shuffer.indices().data(), shuffer.indices().data()+shuffer.indices().size());
-        X = shuffer * X;
-        Y = shuffer * Y;
-    }
-
-    void loadData()
-    {
-        if (shuffle_flag)
-            shuffle();
-    }
-
-    void loadData(Eigen::MatrixXd& alpha)
-    {
-        std::random_shuffle(shuffer.indices().data(), shuffer.indices().data()+shuffer.indices().size());
-        X = shuffer * X;
-        Y = shuffer * Y;
-        alpha = shuffer * alpha;
-    }
-
-    Eigen::MatrixXd X;
-    Eigen::MatrixXd Y;
-    Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> shuffer;
-private:
-    
-    bool shuffle_flag;
-};
+int loadMatrix_2(const std::string& path, Eigen::MatrixXd &M, const std::string& pattern = " ");
 
 inline double calculate_error(const Eigen::MatrixXd& predict, const Eigen::MatrixXd& gts)
 {
@@ -216,6 +141,4 @@ inline double classify_accuracy(const Eigen::MatrixXd& classify_result, const Ei
                                                         Eigen::MatrixXd::Zero(gt.rows(),gt.cols())).sum() / gt.count();
 }
 
-
-int loadMatrix_2(const std::string& path, Eigen::MatrixXd &M, const std::string& pattern = " ");
 #endif

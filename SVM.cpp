@@ -1,31 +1,5 @@
 #include "SVM.h"
 
-void SVM::setKernel()
-{
-    switch (param.kernel_type)
-    {
-    case 0:
-        kernel_function = &SVM::linear;
-        break;
-    case 1:
-        kernel_function = &SVM::poly;
-        break;
-    case 2:
-        kernel_function = &SVM::gaussian;
-        break;
-    default:
-        kernel_function = &SVM::linear;
-        break;
-    }
-}
-
-void SVM::printVerbose()
-{
-    std::cout << param.current_iteration << "/" << param.max_iterations << "\t";
-    std::cout << "loss: " << param.loss << "\t" << "acc: " << int(param.training_acc*10000)/100. << "%";
-    std::cout <<"\t" << "max: " << int(param.max_acc*10000)/100. << "%" << std::endl;
-}
-
 int SVC::takeStep(int& i1, int& i2)
 {
     
@@ -163,9 +137,8 @@ void SVC::SMO()
 void SVC::train()
 {
     std::cout << "start training..." << std::endl;
-    alpha = Eigen::MatrixXd(Eigen::MatrixXd::Constant(dataloader->X.rows(), 1, 0));
+    alpha = Eigen::MatrixXd::Constant(dataloader->X.rows(), 1, 0);
     vector_mask = Eigen::VectorXi(Eigen::VectorXi::Zero(dataloader->X.rows()));
-    // support_vector_indices = std::set<int>();
     SMO();
 }
 
@@ -199,4 +172,16 @@ Eigen::MatrixXd SVC::predict(const Eigen::MatrixXd &input, bool post_process)
 void SVC::postProcess(Eigen::MatrixXd &predict)
 {
     predict = (predict.array() > 0).select(Eigen::MatrixXd::Ones(predict.rows(), predict.cols()), Eigen::MatrixXd::Constant(predict.rows(), predict.cols(), -1)); 
+}
+
+void testSVC(shared_ptr<DataLoader> dataloader)
+{
+	unique_ptr<SVM> svc(new SVC(dataloader));
+	svc->setParam("loss_eval_circle", 5);
+	svc->setParam("max_iterations", 200);
+	svc->setParam("min_delta_loss", -1);
+	svc->setParam("kernel_type", SVM::Gaussian);
+	svc->setParam("tol", 0.01);
+	svc->setParam("poly_n", 5);
+	svc->train();
 }
